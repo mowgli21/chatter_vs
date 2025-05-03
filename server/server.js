@@ -9,10 +9,12 @@ const http = require('http');
 
 // Import routes
 const authRoutes = require('./routes/auth');
+const groupRoutes = require('./routes/group');
 
 // Import models
 const User = require('./models/User');
 const Message = require('./models/Message');
+const Group = require('./models/Group');
 
 dotenv.config();
 
@@ -31,6 +33,7 @@ mongoose.connect(process.env.MONGODB_URI)
 
 // Mount routes
 app.use('/api/auth', authRoutes);
+app.use('/api/groups', groupRoutes);
 
 // WebSocket connection handling
 const clients = new Map(); // Map<userId, ws[]>
@@ -67,56 +70,92 @@ wss.on('connection', (ws) => {
           return;
         }
 
-        const message = new Message({
-          sender: userId,
-          receiver: data.receiverId,
-          content: data.content,
-          timestamp: new Date()
-        });
-        
-        await message.save();
-        
-        // Send message to receiver if online
-        const receiverSockets = clients.get(data.receiverId);
-        if (receiverSockets && receiverSockets.length > 0) {
-          console.log('Sending message to receiver:', data.receiverId);
-          receiverSockets.forEach(sock => {
-            if (sock.readyState === WebSocket.OPEN) {
-              sock.send(JSON.stringify({
-                type: 'message',
-                message: {
-                  _id: message._id,
-                  sender: userId,
-                  receiver: data.receiverId,
-                  content: data.content,
-                  timestamp: message.timestamp,
-                  clientTempId: data.clientTempId
-                }
-              }));
-            }
+        if (data.groupId) {
+          // GROUP MESSAGE
+          const message = new Message({
+            sender: userId,
+            groupId: data.groupId,
+            content: data.content,
+            timestamp: new Date()
           });
-        } else {
-          console.log('Receiver not online:', data.receiverId);
-        }
+          await message.save();
 
-        // Send message back to sender for confirmation
-        console.log('Sending message back to sender:', userId);
-        if (clients.has(userId)) {
-          clients.get(userId).forEach(sock => {
-            if (sock.readyState === WebSocket.OPEN) {
-              sock.send(JSON.stringify({
-                type: 'message',
-                message: {
-                  _id: message._id,
-                  sender: userId,
-                  receiver: data.receiverId,
-                  content: data.content,
-                  timestamp: message.timestamp,
-                  clientTempId: data.clientTempId
-                }
-              }));
+          // Fetch group members
+          const group = await Group.findById(data.groupId);
+          if (group) {
+            for (const memberId of group.members) {
+              const memberSockets = clients.get(memberId.toString());
+              if (memberSockets && memberSockets.length > 0) {
+                memberSockets.forEach(sock => {
+                  if (sock.readyState === WebSocket.OPEN) {
+                    sock.send(JSON.stringify({
+                      type: 'message',
+                      message: {
+                        _id: message._id,
+                        sender: userId,
+                        groupId: data.groupId,
+                        content: data.content,
+                        timestamp: message.timestamp,
+                        clientTempId: data.clientTempId
+                      }
+                    }));
+                  }
+                });
+              }
             }
+          }
+        } else {
+          // DIRECT MESSAGE
+          const message = new Message({
+            sender: userId,
+            receiver: data.receiverId,
+            content: data.content,
+            timestamp: new Date()
           });
+          await message.save();
+
+          // Send message to receiver if online
+          const receiverSockets = clients.get(data.receiverId);
+          if (receiverSockets && receiverSockets.length > 0) {
+            console.log('Sending message to receiver:', data.receiverId);
+            receiverSockets.forEach(sock => {
+              if (sock.readyState === WebSocket.OPEN) {
+                sock.send(JSON.stringify({
+                  type: 'message',
+                  message: {
+                    _id: message._id,
+                    sender: userId,
+                    receiver: data.receiverId,
+                    content: data.content,
+                    timestamp: message.timestamp,
+                    clientTempId: data.clientTempId
+                  }
+                }));
+              }
+            });
+          } else {
+            console.log('Receiver not online:', data.receiverId);
+          }
+
+          // Send message back to sender for confirmation
+          console.log('Sending message back to sender:', userId);
+          if (clients.has(userId)) {
+            clients.get(userId).forEach(sock => {
+              if (sock.readyState === WebSocket.OPEN) {
+                sock.send(JSON.stringify({
+                  type: 'message',
+                  message: {
+                    _id: message._id,
+                    sender: userId,
+                    receiver: data.receiverId,
+                    content: data.content,
+                    timestamp: message.timestamp,
+                    clientTempId: data.clientTempId
+                  }
+                }));
+              }
+            });
+          }
         }
       }
     } catch (error) {

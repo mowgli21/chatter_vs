@@ -11,6 +11,11 @@ const Chat = () => {
   const [users, setUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [groups, setGroups] = useState([]);
+  const [selectedGroup, setSelectedGroup] = useState(null);
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupMembers, setNewGroupMembers] = useState([]);
   const ws = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -77,6 +82,20 @@ const Chat = () => {
 
     fetchUsers();
 
+    // Fetch groups for the current user
+    const fetchGroups = async () => {
+      try {
+        const response = await axios.get('http://localhost:5000/api/groups', {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        });
+        setGroups(response.data);
+      } catch (error) {
+        console.error('Error fetching groups:', error);
+      }
+    };
+
+    fetchGroups();
+
     return () => {
       if (ws.current && ws.current.readyState === WebSocket.OPEN) {
         ws.current.close();
@@ -123,9 +142,18 @@ const Chat = () => {
   }, [selectedUser, currentUser]);
 
   useEffect(() => {
-    // Fetch messages when a user is selected
+    // Fetch messages when a user or group is selected
     const fetchMessages = async () => {
-      if (selectedUser) {
+      if (selectedGroup) {
+        try {
+          const response = await axios.get(`http://localhost:5000/api/groups/${selectedGroup._id}/messages`, {
+            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+          });
+          setMessages(prev => mergeMessages(prev, response.data));
+        } catch (error) {
+          console.error('Error fetching group messages:', error);
+        }
+      } else if (selectedUser) {
         try {
           const response = await axios.get(`http://localhost:5000/api/messages/${selectedUser._id}`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
@@ -137,40 +165,83 @@ const Chat = () => {
       }
     };
     fetchMessages();
-  }, [selectedUser, mergeMessages]);
+  }, [selectedUser, selectedGroup, mergeMessages]);
 
-  // Filter messages to only show those between currentUser and selectedUser
-  const filteredMessages = messages.filter(
-    (msg) =>
-      (msg.sender === currentUser && msg.receiver === selectedUser?._id) ||
-      (msg.sender === selectedUser?._id && msg.receiver === currentUser)
-  );
+  // Filter messages for selected group or user
+  const filteredMessages = selectedGroup
+    ? messages.filter(msg => msg.groupId === selectedGroup._id)
+    : selectedUser
+      ? messages.filter(
+          (msg) =>
+            (msg.sender === currentUser && msg.receiver === selectedUser?._id) ||
+            (msg.sender === selectedUser?._id && msg.receiver === currentUser)
+        )
+      : [];
 
   const handleSendMessage = (message) => {
-    if (message.trim() === '' || !selectedUser) return;
+    if (message.trim() === '' || (!selectedUser && !selectedGroup)) return;
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       const clientTempId = uuidv4();
-      const messageData = {
-        type: 'message',
-        receiverId: selectedUser._id,
-        content: message,
-        clientTempId
-      };
-      ws.current.send(JSON.stringify(messageData));
-      // Optimistically add the message to the UI
-      setMessages(prev => mergeMessages(prev, [{
-        sender: currentUser,
-        receiver: selectedUser._id,
-        content: message,
-        timestamp: new Date(),
-        clientTempId
-      }]));
+      if (selectedGroup) {
+        // Group message
+        const messageData = {
+          type: 'message',
+          groupId: selectedGroup._id,
+          content: message,
+          clientTempId
+        };
+        ws.current.send(JSON.stringify(messageData));
+        // Optimistically add the message to the UI
+        setMessages(prev => mergeMessages(prev, [{
+          sender: currentUser,
+          groupId: selectedGroup._id,
+          content: message,
+          timestamp: new Date(),
+          clientTempId
+        }]));
+      } else if (selectedUser) {
+        // Direct message
+        const messageData = {
+          type: 'message',
+          receiverId: selectedUser._id,
+          content: message,
+          clientTempId
+        };
+        ws.current.send(JSON.stringify(messageData));
+        // Optimistically add the message to the UI
+        setMessages(prev => mergeMessages(prev, [{
+          sender: currentUser,
+          receiver: selectedUser._id,
+          content: message,
+          timestamp: new Date(),
+          clientTempId
+        }]));
+      }
     }
   };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
     window.location.reload();
+  };
+
+  const handleCreateGroup = async (e) => {
+    e.preventDefault();
+    if (!newGroupName || newGroupMembers.length === 0) return;
+    try {
+      const response = await axios.post('http://localhost:5000/api/groups', {
+        name: newGroupName,
+        members: newGroupMembers
+      }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      setGroups(prev => [...prev, response.data]);
+      setShowGroupModal(false);
+      setNewGroupName('');
+      setNewGroupMembers([]);
+    } catch (error) {
+      alert('Failed to create group');
+    }
   };
 
   return (
@@ -180,18 +251,83 @@ const Chat = () => {
         <button onClick={handleLogout} className="logout-button">Logout</button>
       </div>
       <div className="chat-main">
-        <UserList 
-          users={users} 
-          selectedUser={selectedUser} 
-          onSelectUser={setSelectedUser} 
-        />
+        <div style={{ display: 'flex', flexDirection: 'column', width: 250 }}>
+          {/* Group Creation Button and Modal */}
+          <button style={{ marginBottom: 10 }} onClick={() => setShowGroupModal(true)}>
+            + Create Group
+          </button>
+          {showGroupModal && (
+            <div style={{ background: '#fff', border: '1px solid #ccc', borderRadius: 8, padding: 16, marginBottom: 10 }}>
+              <form onSubmit={handleCreateGroup}>
+                <div style={{ marginBottom: 8 }}>
+                  <input
+                    type="text"
+                    placeholder="Group Name"
+                    value={newGroupName}
+                    onChange={e => setNewGroupName(e.target.value)}
+                    required
+                    style={{ width: '100%', padding: 6 }}
+                  />
+                </div>
+                <div style={{ marginBottom: 8, maxHeight: 100, overflowY: 'auto' }}>
+                  {users.map(user => (
+                    <label key={user._id} style={{ display: 'block', fontSize: 14 }}>
+                      <input
+                        type="checkbox"
+                        checked={newGroupMembers.includes(user._id)}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setNewGroupMembers(members => [...members, user._id]);
+                          } else {
+                            setNewGroupMembers(members => members.filter(id => id !== user._id));
+                          }
+                        }}
+                      />
+                      {user.username}
+                    </label>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="submit">Create</button>
+                  <button type="button" onClick={() => setShowGroupModal(false)}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
+          <UserList 
+            users={users} 
+            selectedUser={selectedUser} 
+            onSelectUser={user => {
+              setSelectedUser(user);
+              setSelectedGroup(null);
+            }} 
+          />
+          <div className="group-list">
+            <h3>Groups</h3>
+            <div className="groups">
+              {groups.map(group => (
+                <div
+                  key={group._id}
+                  className={`group-item ${selectedGroup?._id === group._id ? 'selected' : ''}`}
+                  onClick={() => {
+                    setSelectedGroup(group);
+                    setSelectedUser(null);
+                  }}
+                  style={{ cursor: 'pointer', padding: '8px', borderRadius: '6px', marginBottom: 4, background: selectedGroup?._id === group._id ? '#e3f2fd' : '#fff' }}
+                >
+                  {group.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
         <div className="chat-content">
-          {selectedUser ? (
+          {(selectedUser || selectedGroup) ? (
             <>
               <div className="chat-messages">
                 {filteredMessages.map((message, index) => (
                   <Message
-                    key={message._id || index}
+                    key={message._id || message.clientTempId || index}
                     message={message}
                     isCurrentUser={message.sender === currentUser}
                   />
@@ -202,7 +338,7 @@ const Chat = () => {
             </>
           ) : (
             <div className="select-user-message">
-              Select a user to start chatting
+              Select a user or group to start chatting
             </div>
           )}
         </div>
