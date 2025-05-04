@@ -1,7 +1,8 @@
 import React from 'react';
+import axios from 'axios';
 import './UserList.css';
 
-const UserList = ({ users, selectedUser, onSelectUser, currentUser }) => {
+const UserList = ({ users, selectedUser, onSelectUser, currentUser, blockedUsers = [], onBlockToggle }) => {
   return (
     <div className="user-list compact">
       <h3 style={{ fontSize: 15, margin: '10px 0 6px 0' }}>Online Users</h3>
@@ -25,6 +26,15 @@ const UserList = ({ users, selectedUser, onSelectUser, currentUser }) => {
                 <span className="username compact">{user.username}{user._id === currentUser ? ' (You)' : ''}</span>
                 <span className="status compact">{user.online ? 'Online' : 'Offline'}</span>
               </div>
+              {/* Block/Unblock Button */}
+              {user._id !== currentUser && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onBlockToggle(user._id); }}
+                  style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 6px', cursor: 'pointer' }}
+                >
+                  {blockedUsers.includes(user._id) ? 'Unblock' : 'Block'}
+                </button>
+              )}
             </div>
           );
         })}

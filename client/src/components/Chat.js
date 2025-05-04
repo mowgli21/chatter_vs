@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import Message from './Message';
 import ChatInput from './ChatInput';
 import UserList from './UserList';
@@ -36,6 +36,7 @@ const Chat = () => {
   const [readBy, setReadBy] = useState({}); // {messageId: [userId, ...]}
   const [replyToMessage, setReplyToMessage] = useState(null);
   const [showReplyModal, setShowReplyModal] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState([]); // Store IDs of users blocked BY current user
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -145,6 +146,23 @@ const Chat = () => {
 
     fetchGroups();
 
+    // Fetch blocked users list
+    const fetchBlocked = async () => {
+      if (!currentUser) return; // Don't fetch if currentUser is not set yet
+      try {
+        const response = await axios.get('http://localhost:5000/api/users/blocked', {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+        });
+        setBlockedUsers(response.data.map(u => u._id));
+      } catch (error) {
+        console.error('Error fetching blocked users:', error);
+      }
+    };
+
+    if (currentUser) {
+      fetchBlocked();
+    }
+
     return () => {
       if (ws.current && ws.current.readyState === WebSocket.OPEN) {
         ws.current.close();
@@ -194,8 +212,12 @@ const Chat = () => {
     return Array.from(map.values()).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   }, [selectedUser, currentUser]);
 
+  const isSelectedUserBlocked = useMemo(() => {
+    return selectedUser && blockedUsers.includes(selectedUser._id);
+  }, [selectedUser, blockedUsers]);
+
   useEffect(() => {
-    // Fetch messages when a user or group is selected
+    // Fetch messages for selected group or user
     const fetchMessages = async () => {
       if (selectedGroup) {
         try {
@@ -206,27 +228,35 @@ const Chat = () => {
         } catch (error) {
           console.error('Error fetching group messages:', error);
         }
-      } else if (selectedUser) {
+      } else if (selectedUser) { // Fetch messages regardless of block status
         try {
           const response = await axios.get(`http://localhost:5000/api/messages/${selectedUser._id}`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
           });
-          setMessages(prev => mergeMessages(prev, response.data));
+          // Merge fetched messages - block status only affects input/sending
+          setMessages(prev => mergeMessages(prev, response.data)); 
         } catch (error) {
-          console.error('Error fetching messages:', error);
+          // Handle cases where messages might be restricted by backend due to blocking
+          if (error.response && error.response.status === 403) {
+             console.warn('Cannot fetch messages: Interaction blocked by server.');
+             setMessages([]); // Clear messages if server explicitly forbids fetching
+          } else {
+            console.error('Error fetching messages:', error);
+          }
+          // If not a 403, decide if you want to clear messages or keep potentially stale ones
+          // setMessages([]); // Optional: Clear messages on other errors too
         }
+      } else {
+        // No user or group selected, clear messages
+        setMessages([]);
       }
     };
     fetchMessages();
-  }, [selectedUser, selectedGroup, mergeMessages]);
+  }, [selectedUser, selectedGroup, mergeMessages, currentUser]); // Removed isSelectedUserBlocked from dependencies
 
   // Filter messages for selected group or user, excluding replies
-  const filteredMessages = messages.filter(msg => {
-    // Exclude messages that are replies (have a parentMessage)
-    if (msg.parentMessage) {
-      return false;
-    }
-    // Include messages based on the selected group or user
+  const filteredMessages = useMemo(() => messages.filter(msg => {
+    if (msg.parentMessage) return false; // Exclude replies from main chat
     if (selectedGroup) {
       return msg.groupId === selectedGroup._id;
     } else if (selectedUser) {
@@ -235,9 +265,8 @@ const Chat = () => {
         (msg.sender === selectedUser?._id && msg.receiver === currentUser)
       );
     }
-    // If neither user nor group is selected, show nothing in the main list
     return false;
-  });
+  }), [messages, selectedUser, selectedGroup, currentUser]);
 
   const handleSendMessage = (message, media, parentMessageId = null) => {
     if ((message.trim() === '' && !media) || (!selectedUser && !selectedGroup)) return;
@@ -393,8 +422,7 @@ const Chat = () => {
       setSelectedGroup(null);
       // Remove the group from the local state
       setGroups(prevGroups => prevGroups.filter(g => g._id !== selectedGroup._id));
-      // Optionally, fetch groups again if you prefer server confirmation, 
-      // but removing from local state is faster for UI.
+      // Optionally refresh group list
       // const response = await axios.get('http://localhost:5000/api/groups', {
       //   headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       // });
@@ -509,6 +537,23 @@ const Chat = () => {
     setReplyToMessage(null);
   };
 
+  // Callback for UserList to update blocked state
+  const handleBlockToggle = useCallback(async (userIdToToggle) => {
+    const isBlocked = blockedUsers.includes(userIdToToggle);
+    const endpoint = isBlocked ? 'unblock' : 'block';
+    try {
+      await axios.post(`http://localhost:5000/api/users/${endpoint}/${userIdToToggle}`, {}, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      setBlockedUsers(prev => 
+        isBlocked ? prev.filter(id => id !== userIdToToggle) : [...prev, userIdToToggle]
+      );
+    } catch (error) {
+      console.error(`Error ${endpoint} user:`, error);
+      alert(`Failed to ${endpoint} user.`);
+    }
+  }, [blockedUsers]);
+
   return (
     <div className="chat-container compact">
       <div className="chat-header compact">
@@ -567,7 +612,7 @@ const Chat = () => {
               </form>
             </div>
           )}
-          {/* User and Group List */}
+          {/* User and Group List - Pass blockedUsers state */}
           <UserList 
             users={users} 
             selectedUser={selectedUser} 
@@ -576,6 +621,8 @@ const Chat = () => {
               setSelectedGroup(null);
             }} 
             currentUser={currentUser}
+            blockedUsers={blockedUsers} // Pass blocked list
+            onBlockToggle={handleBlockToggle} // Pass handler
           />
           <div className="group-list">
             <h3 style={{ fontSize: 15, margin: '10px 0 6px 0' }}>Groups</h3>
@@ -606,6 +653,7 @@ const Chat = () => {
           </div>
         </div>
         <div className="chat-content compact">
+          {/* Always show chat content area */}
           {(selectedUser || selectedGroup) ? (
             <>
               <div className="chat-messages compact">
@@ -625,7 +673,17 @@ const Chat = () => {
                 <div ref={messagesEndRef} />
               </div>
               {typingIndicator}
-              <ChatInput onSendMessage={handleSendMessage} onTyping={sendTyping} />
+              <ChatInput 
+                onSendMessage={handleSendMessage} 
+                onTyping={sendTyping} 
+                isBlocked={isSelectedUserBlocked && !!selectedUser} // Pass block status only for users
+              />
+              {/* Show block status message only when a user is selected and blocked */}
+              {isSelectedUserBlocked && selectedUser && (
+                <div style={{ fontSize: 12, color: 'red', textAlign: 'center', padding: '5px 0' }}>
+                  You cannot send messages to this blocked user.
+                </div>
+              )}
               {/* Group Profile Button */}
               {selectedGroup && (
                 <button style={{ marginTop: 8, fontSize: 13, padding: '4px 10px' }} onClick={openGroupProfile}>

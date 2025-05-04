@@ -29,7 +29,8 @@ const userSchema = new mongoose.Schema({
   },
   username: { type: String, required: true },
   online: { type: Boolean, default: false },
-  profilePic: { type: String }, // URL or base64 string
+  profilePic: { type: String, default: '' }, // Store as base64 or URL
+  blockedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, {
   timestamps: true
 });

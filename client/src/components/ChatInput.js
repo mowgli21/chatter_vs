@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import EmojiPicker from 'emoji-picker-react';
 import './ChatInput.css';
 
-const ChatInput = ({ onSendMessage, onTyping }) => {
+const ChatInput = ({ onSendMessage, onTyping, isBlocked }) => {
   const [message, setMessage] = useState('');
   const [file, setFile] = useState(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -49,19 +49,30 @@ const ChatInput = ({ onSendMessage, onTyping }) => {
           type="text"
           value={message}
           onChange={handleChange}
-          placeholder="Type a message..."
+          placeholder={isBlocked ? "User is blocked" : "Type a message..."}
           className="chat-input"
+          disabled={isBlocked}
         />
         {/* Emoji Button */}
         <button 
           type="button" 
           className="emoji-button"
           onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
+          disabled={isBlocked}
         >
           Emoji
         </button>
-        <input type="file" onChange={handleFileChange} className="file-input" />
-        <button type="submit" className="send-button">
+        <input 
+          type="file" 
+          onChange={handleFileChange} 
+          className="file-input" 
+          disabled={isBlocked}
+        />
+        <button 
+          type="submit" 
+          className="send-button" 
+          disabled={isBlocked}
+        >
           Send
         </button>
         {file && (

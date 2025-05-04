@@ -10,6 +10,7 @@ const http = require('http');
 // Import routes
 const authRoutes = require('./routes/auth');
 const groupRoutes = require('./routes/group');
+const userRoutes = require('./routes/user');
 
 // Import models
 const User = require('./models/User');
@@ -34,6 +35,7 @@ mongoose.connect(process.env.MONGODB_URI)
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/users', userRoutes);
 
 // WebSocket connection handling
 const clients = new Map(); // Map<userId, ws[]>
@@ -119,6 +121,24 @@ wss.on('connection', (ws) => {
           }
         } else {
           // DIRECT MESSAGE
+          
+          // Check for blocking
+          const senderUser = await User.findById(userId);
+          const receiverUser = await User.findById(data.receiverId);
+
+          if (!receiverUser) {
+            console.log('Receiver not found for message sending.');
+            return; // Or handle appropriately
+          }
+
+          // Don't save or send if sender blocked receiver OR receiver blocked sender
+          if (senderUser.blockedUsers.includes(data.receiverId) || 
+              receiverUser.blockedUsers.includes(userId)) {
+            console.log('Message blocked between users:', userId, data.receiverId);
+            // Optionally send an error back to the sender?
+            return;
+          }
+          
           if (data.media) {
             console.log('Received media:', data.media.type, data.media.name, data.media.url ? data.media.url.slice(0, 30) : '');
           }
@@ -340,10 +360,30 @@ app.get('/api/users', authenticateToken, async (req, res) => {
 
 app.get('/api/messages/:userId', authenticateToken, async (req, res) => {
   try {
+    const currentUserId = req.user.userId;
+    const otherUserId = req.params.userId;
+
+    // Fetch the current user to check their blocked list
+    const currentUserData = await User.findById(currentUserId);
+    if (!currentUserData) return res.sendStatus(401); // Should not happen if token is valid
+    
+    // Check if the other user is blocked by the current user
+    if (currentUserData.blockedUsers.includes(otherUserId)) {
+      console.log(`User ${currentUserId} has blocked ${otherUserId}, returning empty messages.`);
+      return res.json([]); // Return empty array if blocked
+    }
+
+    // Check if the current user is blocked by the other user (optional, depends on desired behavior)
+    // const otherUserData = await User.findById(otherUserId);
+    // if (otherUserData && otherUserData.blockedUsers.includes(currentUserId)) {
+    //   console.log(`User ${otherUserId} has blocked ${currentUserId}, returning empty messages.`);
+    //   return res.json([]); 
+    // }
+    
     const messages = await Message.find({
       $or: [
-        { sender: req.user.userId, receiver: req.params.userId },
-        { sender: req.params.userId, receiver: req.user.userId }
+        { sender: currentUserId, receiver: otherUserId },
+        { sender: otherUserId, receiver: currentUserId }
       ]
     }).populate('sender', 'username profilePic')
       .populate('receiver', 'username profilePic')
