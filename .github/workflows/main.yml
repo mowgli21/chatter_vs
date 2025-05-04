@@ -13,7 +13,6 @@ jobs:
     strategy:
       matrix:
         node-version: [18.x]
-        mongodb-version: ['6.0']
 
     steps:
     - uses: actions/checkout@v3
@@ -22,11 +21,6 @@ jobs:
       uses: actions/setup-node@v3
       with:
         node-version: ${{ matrix.node-version }}
-        
-    - name: Start MongoDB
-      uses: supercharge/mongodb-github-action@1.10.0
-      with:
-        mongodb-version: ${{ matrix.mongodb-version }}
         
     - name: Install server dependencies
       run: cd server ; npm install
@@ -38,7 +32,7 @@ jobs:
       run: cd server ; npm test
       env:
         CI: true
-        MONGODB_URI: mongodb://localhost:27017/test_db
+        MONGODB_URI: ${{ secrets.MONGODB_URI }}
         JWT_SECRET: test_secret
         
     - name: Run client tests
@@ -96,7 +90,12 @@ jobs:
         name: server-build
         path: server
         
-    - name: Deploy to Railway
+    - name: Deploy to Heroku
+      uses: akhileshns/heroku-deploy@v3.12.14
+      with:
+        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+        heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
+        heroku_email: ${{ secrets.HEROKU_EMAIL }}
       env:
-        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-      run: npm install -g @railway/cli ; railway up
+        HD_MONGODB_URI: ${{ secrets.MONGODB_URI }}
+        HD_JWT_SECRET: ${{ secrets.JWT_SECRET }}

@@ -2,7 +2,12 @@ version: '3.8'
 
 services:
   server:
-    build: ./server
+    build: 
+      context: ./server
+      args:
+        - NODE_ENV=development
+    command: >
+      sh -c "cd server ; npm install ; npm run dev"
     ports:
       - "5000:5000"
     environment:
@@ -15,7 +20,12 @@ services:
       - chatter-network
 
   client:
-    build: ./client
+    build: 
+      context: ./client
+      args:
+        - NODE_ENV=development
+    command: >
+      sh -c "cd client ; npm install ; npm start"
     ports:
       - "80:80"
     depends_on:

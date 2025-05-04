@@ -1,6 +1,19 @@
 {
   "name": "chatter",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:all": "npm install ; cd client ; npm install ; cd ../server ; npm install",
+    "start": "docker-compose up",
+    "start:dev": "concurrently \"cd server ; npm run dev\" \"cd client ; npm start\"",
+    "build": "cd client ; npm run build ; cd ../server ; npm run build",
+    "test": "concurrently \"cd server ; npm test\" \"cd client ; npm test\"",
+    "test:e2e": "cypress run",
+    "cypress:open": "cypress open",
+    "deploy": "railway up"
+  },
   "devDependencies": {
+    "concurrently": "^8.2.2",
     "cypress": "^14.2.1",
     "nodemon": "^3.1.9"
   }
