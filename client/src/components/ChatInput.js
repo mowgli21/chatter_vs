@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './ChatInput.css';
 
-const ChatInput = ({ onSendMessage }) => {
+const ChatInput = ({ onSendMessage, onTyping }) => {
   const [message, setMessage] = useState('');
 
   const handleSubmit = (e) => {
@@ -12,12 +12,17 @@ const ChatInput = ({ onSendMessage }) => {
     }
   };
 
+  const handleChange = (e) => {
+    setMessage(e.target.value);
+    if (onTyping) onTyping();
+  };
+
   return (
     <form className="chat-input-form" onSubmit={handleSubmit}>
       <input
         type="text"
         value={message}
-        onChange={(e) => setMessage(e.target.value)}
+        onChange={handleChange}
         placeholder="Type a message..."
         className="chat-input"
       />

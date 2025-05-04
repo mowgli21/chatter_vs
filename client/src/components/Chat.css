@@ -63,4 +63,81 @@
   height: 100%;
   color: #666;
   font-size: 1.2rem;
+}
+
+.chat-container.compact {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  font-size: 13px;
+  max-width: 900px;
+  margin: 0 auto;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.07);
+  background: #f8fafc;
+  border-radius: 12px;
+  min-height: 90vh;
+}
+
+.chat-header.compact {
+  padding: 10px 18px;
+  min-height: 44px;
+}
+
+.logout-button.compact {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 3px;
+}
+
+.chat-main.compact {
+  min-height: 0;
+}
+
+.user-list.compact, .group-list {
+  margin-bottom: 8px;
+}
+
+.user-item.compact {
+  transition: background 0.2s;
+}
+
+.user-item.compact.selected, .group-item.selected {
+  background: #e3f2fd !important;
+}
+
+.user-item.compact.current-user-highlight {
+  border-left: 3px solid #1976d2;
+  background: #f0f7ff !important;
+}
+
+.user-info.compact {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.username.compact {
+  font-weight: 500;
+  color: #222;
+}
+
+.status.compact {
+  font-size: 11px;
+  color: #888;
+}
+
+.chat-content.compact {
+  padding: 12px 14px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+  margin: 12px 0;
+}
+
+.chat-messages.compact {
+  padding: 10px 0 10px 0;
+  gap: 10px;
+}
+
+.select-user-message.compact {
+  font-size: 1rem;
+  color: #888;
 } 

@@ -28,7 +28,8 @@ const userSchema = new mongoose.Schema({
     }
   },
   username: { type: String, required: true },
-  online: { type: Boolean, default: false }
+  online: { type: Boolean, default: false },
+  profilePic: { type: String }, // URL or base64 string
 }, {
   timestamps: true
 });

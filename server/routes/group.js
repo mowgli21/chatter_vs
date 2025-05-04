@@ -87,4 +87,43 @@ router.get('/:groupId/messages', authenticateToken, async (req, res) => {
   }
 });
 
+// Update group picture
+router.post('/:groupId/picture', authenticateToken, async (req, res) => {
+  try {
+    const { picture } = req.body; // Expect a URL or base64 string
+    const group = await Group.findByIdAndUpdate(
+      req.params.groupId,
+      { picture },
+      { new: true }
+    );
+    res.json(group);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Leave group (remove self from group)
+router.post('/:groupId/leave', authenticateToken, async (req, res) => {
+  try {
+    const group = await Group.findByIdAndUpdate(
+      req.params.groupId,
+      { $pull: { members: req.user.userId } },
+      { new: true }
+    );
+    res.json(group);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Get group details
+router.get('/:groupId', authenticateToken, async (req, res) => {
+  try {
+    const group = await Group.findById(req.params.groupId).populate('members', 'username email');
+    res.json(group);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 module.exports = router; 

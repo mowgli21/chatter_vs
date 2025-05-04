@@ -157,6 +157,88 @@ wss.on('connection', (ws) => {
             });
           }
         }
+      } else if (data.type === 'typing') {
+        if (!userId) return;
+        if (data.groupId) {
+          // Typing in group chat: notify all group members except sender
+          const group = await Group.findById(data.groupId);
+          if (group) {
+            for (const memberId of group.members) {
+              if (memberId.toString() === userId) continue;
+              const memberSockets = clients.get(memberId.toString());
+              if (memberSockets && memberSockets.length > 0) {
+                memberSockets.forEach(sock => {
+                  if (sock.readyState === WebSocket.OPEN) {
+                    sock.send(JSON.stringify({
+                      type: 'typing',
+                      from: userId,
+                      groupId: data.groupId
+                    }));
+                  }
+                });
+              }
+            }
+          }
+        } else if (data.receiverId) {
+          // Typing in direct chat: notify receiver
+          const receiverSockets = clients.get(data.receiverId);
+          if (receiverSockets && receiverSockets.length > 0) {
+            receiverSockets.forEach(sock => {
+              if (sock.readyState === WebSocket.OPEN) {
+                sock.send(JSON.stringify({
+                  type: 'typing',
+                  from: userId
+                }));
+              }
+            });
+          }
+        }
+      } else if (data.type === 'read') {
+        if (!userId || !data.messageIds) return;
+        // Mark messages as read by this user
+        await Message.updateMany(
+          { _id: { $in: data.messageIds } },
+          { $addToSet: { readBy: userId } }
+        );
+        // Fetch updated messages
+        const updatedMessages = await Message.find({ _id: { $in: data.messageIds } });
+        // Broadcast read status
+        if (data.groupId) {
+          // Group: notify all group members
+          const group = await Group.findById(data.groupId);
+          if (group) {
+            for (const memberId of group.members) {
+              const memberSockets = clients.get(memberId.toString());
+              if (memberSockets && memberSockets.length > 0) {
+                memberSockets.forEach(sock => {
+                  if (sock.readyState === WebSocket.OPEN) {
+                    sock.send(JSON.stringify({
+                      type: 'read',
+                      messageIds: data.messageIds,
+                      userId
+                    }));
+                  }
+                });
+              }
+            }
+          }
+        } else if (data.receiverId) {
+          // Direct: notify sender and receiver
+          [data.receiverId, userId].forEach(uid => {
+            const sockets = clients.get(uid);
+            if (sockets && sockets.length > 0) {
+              sockets.forEach(sock => {
+                if (sock.readyState === WebSocket.OPEN) {
+                  sock.send(JSON.stringify({
+                    type: 'read',
+                    messageIds: data.messageIds,
+                    userId
+                  }));
+                }
+              });
+            }
+          });
+        }
       }
     } catch (error) {
       console.error('WebSocket message error:', error);

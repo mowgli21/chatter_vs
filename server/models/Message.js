@@ -5,7 +5,8 @@ const messageSchema = new mongoose.Schema({
   receiver: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   groupId: { type: mongoose.Schema.Types.ObjectId, ref: 'Group' },
   content: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now }
+  timestamp: { type: Date, default: Date.now },
+  readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 });
 
 module.exports = mongoose.model('Message', messageSchema); 

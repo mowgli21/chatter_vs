@@ -45,7 +45,7 @@ router.post('/register', async (req, res) => {
 
     // Create token
     const token = jwt.sign(
-      { userId: user._id },
+      { userId: user._id, username: user.username, email: user.email },
       process.env.JWT_SECRET
     );
 
@@ -74,13 +74,46 @@ router.post('/login', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { userId: user._id },
+      { userId: user._id, username: user.username, email: user.email },
       process.env.JWT_SECRET
     );
 
     res.json({ token });
   } catch (error) {
     console.error('Login error:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Get current user's profile
+router.get('/profile', async (req, res) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) return res.sendStatus(401);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId, 'username email profilePic');
+    if (!user) return res.sendStatus(404);
+    res.json(user);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Update current user's profile
+router.post('/profile', async (req, res) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token) return res.sendStatus(401);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { username, email, profilePic } = req.body;
+    const update = {};
+    if (username) update.username = username;
+    if (email) update.email = email;
+    if (profilePic) update.profilePic = profilePic;
+    const user = await User.findByIdAndUpdate(decoded.userId, update, { new: true, fields: 'username email profilePic' });
+    if (!user) return res.sendStatus(404);
+    res.json(user);
+  } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
