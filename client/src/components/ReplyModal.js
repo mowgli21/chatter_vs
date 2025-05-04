@@ -3,6 +3,7 @@ import axios from 'axios';
 
 const ReplyModal = ({ message, onClose, onSendReply }) => {
   const [replyContent, setReplyContent] = useState('');
+  const [replyFile, setReplyFile] = useState(null);
   const [replies, setReplies] = useState([]);
   const [loadingReplies, setLoadingReplies] = useState(false);
 
@@ -34,10 +35,23 @@ const ReplyModal = ({ message, onClose, onSendReply }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (replyContent.trim()) {
-      onSendReply(replyContent, message._id);
+    if (replyContent.trim() || replyFile) {
+      if (replyFile) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const media = {
+            url: reader.result,
+            type: replyFile.type.startsWith('image') ? 'image' : 'file',
+            name: replyFile.name
+          };
+          onSendReply(replyContent, message._id, media);
+          setReplyFile(null);
+        };
+        reader.readAsDataURL(replyFile);
+      } else {
+        onSendReply(replyContent, message._id, null);
+      }
       setReplyContent('');
-      // Note: We don't re-fetch replies here, assuming the main Chat component will update.
     }
   };
 
@@ -97,9 +111,15 @@ const ReplyModal = ({ message, onClose, onSendReply }) => {
             style={{ width: '100%', padding: 8, fontSize: 13, border: '1px solid #ccc', borderRadius: 4, marginBottom: 8 }}
             required
           />
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button type="submit" style={{ fontSize: 13, padding: '6px 12px' }}>Send Reply</button>
-            <button type="button" style={{ fontSize: 13, padding: '6px 12px' }} onClick={onClose}>Cancel</button>
+            <input 
+              type="file" 
+              onChange={(e) => setReplyFile(e.target.files[0])} 
+              style={{ fontSize: 12 }}
+            />
+            {replyFile && <span style={{ fontSize: 11, color: '#555' }}>{replyFile.name}</span>}
+            <button type="button" style={{ fontSize: 13, padding: '6px 12px', marginLeft: 'auto' }} onClick={onClose}>Cancel</button>
           </div>
         </form>
       </div>

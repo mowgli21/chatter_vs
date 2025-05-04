@@ -99,6 +99,22 @@ const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGro
     hasParent: !!message.parentMessage 
   });
 
+  const handleDelete = async () => {
+    if (!message._id || !window.confirm('Are you sure you want to delete this message?')) {
+      return;
+    }
+    try {
+      console.log('Attempting to delete message:', message._id);
+      await axios.delete(`http://localhost:5000/api/messages/${message._id}`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      // Message removal is handled by WebSocket event
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      alert('Failed to delete message.');
+    }
+  };
+
   return (
     <div className={`message ${isCurrentUser ? 'current-user' : 'other-user'}`}>
       <div className="message-content">
@@ -113,6 +129,14 @@ const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGro
               onClick={() => onReply(message)} // Open modal via Chat.js
             >
               Reply/Thread {replyCount > 0 ? `(${replyCount})` : ''}
+            </button>
+          )}
+          {isCurrentUser && message._id && (
+            <button 
+              style={{ fontSize: 11, color: '#dc3545', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 8 }}
+              onClick={handleDelete}
+            >
+              Delete
             </button>
           )}
         </div>

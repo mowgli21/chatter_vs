@@ -4,7 +4,7 @@ const cors = require('cors');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const dotenv = require('dotenv');
-const WebSocket = require('ws');
+const { WebSocket } = require('ws');
 const http = require('http');
 
 // Import routes
@@ -290,18 +290,24 @@ wss.on('connection', (ws) => {
   });
 });
 
+// Function to broadcast WebSocket messages
+const broadcast = (data, senderWs = null) => {
+  wss.clients.forEach(client => {
+    // Optional: Don't send back to the sender
+    // if (senderWs && client === senderWs) return;
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(data));
+    }
+  });
+};
+
+// Modify broadcastOnlineUsers to use the global broadcast function
 async function broadcastOnlineUsers() {
   try {
     const onlineUsers = await User.find({ online: true }, 'username _id');
-    const message = JSON.stringify({
+    broadcast({
       type: 'onlineUsers',
       users: onlineUsers
-    });
-    
-    clients.forEach(client => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(message);
-      }
     });
   } catch (error) {
     console.error('Error broadcasting online users:', error);
@@ -386,6 +392,42 @@ app.get('/api/messages/:messageId/replies/count', authenticateToken, async (req,
   } catch (error) {
     console.error('Error fetching reply count:', error);
     res.status(400).json({ error: error.message });
+  }
+});
+
+// Delete a message
+app.delete('/api/messages/:messageId', authenticateToken, async (req, res) => {
+  try {
+    const messageId = req.params.messageId;
+    const userId = req.user.userId;
+
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // Ensure only the sender can delete their message
+    if (message.sender.toString() !== userId) {
+      return res.status(403).json({ error: 'You can only delete your own messages' });
+    }
+
+    // Perform the delete
+    await Message.findByIdAndDelete(messageId);
+
+    // Broadcast the delete event via WebSocket
+    broadcast({
+      type: 'deleteMessage',
+      messageId: messageId,
+      // Include context for frontend filtering
+      conversationId: message.receiver || message.groupId 
+    });
+
+    res.status(200).json({ message: 'Message deleted successfully' });
+
+  } catch (error) {
+    console.error('Error deleting message:', error);
+    res.status(500).json({ error: 'Failed to delete message' });
   }
 });
 

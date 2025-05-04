@@ -101,6 +101,10 @@ const Chat = () => {
           });
           return updated;
         });
+      } else if (data.type === 'deleteMessage') {
+        console.log('Received delete message event for:', data.messageId);
+        setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
+        // TODO: Consider updating reply counts or removing replies from state if they were deleted.
       }
     };
 
@@ -215,13 +219,13 @@ const Chat = () => {
     fetchMessages();
   }, [selectedUser, selectedGroup, mergeMessages]);
 
-  // Filter messages for selected group or user
+  // Filter messages for selected group or user, excluding replies
   const filteredMessages = messages.filter(msg => {
-    // Exclude messages that are replies
+    // Exclude messages that are replies (have a parentMessage)
     if (msg.parentMessage) {
       return false;
     }
-    // Include messages based on selected group or user
+    // Include messages based on the selected group or user
     if (selectedGroup) {
       return msg.groupId === selectedGroup._id;
     } else if (selectedUser) {
@@ -230,7 +234,8 @@ const Chat = () => {
         (msg.sender === selectedUser?._id && msg.receiver === currentUser)
       );
     }
-    return false; // Shouldn't happen if a user or group is selected
+    // If neither user nor group is selected, show nothing in the main list
+    return false;
   });
 
   const handleSendMessage = (message, media, parentMessageId = null) => {
@@ -488,8 +493,8 @@ const Chat = () => {
     setShowReplyModal(true);
   };
 
-  const handleSendReplyFromModal = (replyContent, parentMessageId) => {
-    handleSendMessage(replyContent, null, parentMessageId);
+  const handleSendReplyFromModal = (replyContent, parentMessageId, media = null) => {
+    handleSendMessage(replyContent, media, parentMessageId);
     setShowReplyModal(false);
     setReplyToMessage(null);
   };
