@@ -5,6 +5,7 @@ import UserList from './UserList';
 import axios from 'axios';
 import './Chat.css';
 import { v4 as uuidv4 } from 'uuid';
+import ReplyModal from './ReplyModal';
 
 const Chat = () => {
   const [messages, setMessages] = useState([]);
@@ -34,6 +35,7 @@ const Chat = () => {
   const [typingUsers, setTypingUsers] = useState({}); // {userId: timestamp} for direct, {groupId: {userId: timestamp}} for group
   const [readBy, setReadBy] = useState({}); // {messageId: [userId, ...]}
   const [replyToMessage, setReplyToMessage] = useState(null);
+  const [showReplyModal, setShowReplyModal] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -214,21 +216,28 @@ const Chat = () => {
   }, [selectedUser, selectedGroup, mergeMessages]);
 
   // Filter messages for selected group or user
-  const filteredMessages = selectedGroup
-    ? messages.filter(msg => msg.groupId === selectedGroup._id)
-    : selectedUser
-      ? messages.filter(
-          (msg) =>
-            (msg.sender === currentUser && msg.receiver === selectedUser?._id) ||
-            (msg.sender === selectedUser?._id && msg.receiver === currentUser)
-        )
-      : [];
+  const filteredMessages = messages.filter(msg => {
+    // Exclude messages that are replies
+    if (msg.parentMessage) {
+      return false;
+    }
+    // Include messages based on selected group or user
+    if (selectedGroup) {
+      return msg.groupId === selectedGroup._id;
+    } else if (selectedUser) {
+      return (
+        (msg.sender === currentUser && msg.receiver === selectedUser?._id) ||
+        (msg.sender === selectedUser?._id && msg.receiver === currentUser)
+      );
+    }
+    return false; // Shouldn't happen if a user or group is selected
+  });
 
-  const handleSendMessage = (message, media) => {
+  const handleSendMessage = (message, media, parentMessageId = null) => {
     if ((message.trim() === '' && !media) || (!selectedUser && !selectedGroup)) return;
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       const clientTempId = uuidv4();
-      const parentMessage = replyToMessage ? replyToMessage._id : null;
+      const parentMessage = parentMessageId || null;
       if (selectedGroup) {
         // Group message
         const messageData = {
@@ -474,6 +483,17 @@ const Chat = () => {
     }
   }, [filteredMessages, selectedUser, selectedGroup, currentUser, readBy]);
 
+  const handleOpenReplyModal = (message) => {
+    setReplyToMessage(message);
+    setShowReplyModal(true);
+  };
+
+  const handleSendReplyFromModal = (replyContent, parentMessageId) => {
+    handleSendMessage(replyContent, null, parentMessageId);
+    setShowReplyModal(false);
+    setReplyToMessage(null);
+  };
+
   return (
     <div className="chat-container compact">
       <div className="chat-header compact">
@@ -575,17 +595,11 @@ const Chat = () => {
                     selectedGroup={selectedGroup}
                     users={users}
                     media={message.media}
-                    onReply={() => setReplyToMessage(message)}
+                    onReply={handleOpenReplyModal}
                   />
                 ))}
                 <div ref={messagesEndRef} />
               </div>
-              {replyToMessage && (
-                <div style={{ background: '#f0f7ff', borderLeft: '3px solid #1976d2', padding: '6px 12px', margin: '8px 0', borderRadius: 6, fontSize: 13 }}>
-                  Replying to: <b>{replyToMessage.content || (replyToMessage.media ? replyToMessage.media.name : 'Media')}</b>
-                  <button style={{ marginLeft: 12, fontSize: 12 }} onClick={() => setReplyToMessage(null)}>Cancel</button>
-                </div>
-              )}
               {typingIndicator}
               <ChatInput onSendMessage={handleSendMessage} onTyping={sendTyping} />
               {/* Group Profile Button */}
@@ -679,6 +693,14 @@ const Chat = () => {
                 </form>
               </div>
             </div>
+          )}
+          {/* Reply Modal */}
+          {showReplyModal && (
+            <ReplyModal
+              message={replyToMessage}
+              onClose={() => setShowReplyModal(false)}
+              onSendReply={handleSendReplyFromModal}
+            />
           )}
         </div>
       </div>

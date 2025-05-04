@@ -351,28 +351,40 @@ app.get('/api/messages/:userId', authenticateToken, async (req, res) => {
 app.get('/api/messages/:messageId/replies', authenticateToken, async (req, res) => {
   try {
     console.log('Fetching replies for messageId:', req.params.messageId);
-    
-    // Check if the message actually exists first
     const parentMessage = await Message.findById(req.params.messageId);
     if (!parentMessage) {
       console.log('Parent message not found!');
       return res.status(404).json({ error: 'Parent message not found' });
     }
     
-    const replies = await Message.find({ parentMessage: req.params.messageId }).sort('timestamp');
+    // Populate sender information for replies
+    const replies = await Message.find({ parentMessage: req.params.messageId })
+                                   .populate('sender', 'username')
+                                   .sort('timestamp');
+                                   
     console.log('Replies found:', replies.length);
-    
     if (replies.length > 0) {
       console.log('Sample reply:', {
         id: replies[0]._id,
         content: replies[0].content,
-        parentMessage: replies[0].parentMessage
+        parentMessage: replies[0].parentMessage,
+        senderUsername: replies[0].sender?.username
       });
     }
-    
     res.json(replies);
   } catch (error) {
     console.error('Error fetching replies:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Fetch reply count for a given message
+app.get('/api/messages/:messageId/replies/count', authenticateToken, async (req, res) => {
+  try {
+    const count = await Message.countDocuments({ parentMessage: req.params.messageId });
+    res.json({ count });
+  } catch (error) {
+    console.error('Error fetching reply count:', error);
     res.status(400).json({ error: error.message });
   }
 });

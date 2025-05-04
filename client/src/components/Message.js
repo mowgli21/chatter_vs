@@ -3,28 +3,18 @@ import './Message.css';
 import axios from 'axios';
 
 const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGroup, users = [], media, onReply }) => {
-  const [replies, setReplies] = useState([]);
-  const [showReplies, setShowReplies] = useState(false);
-  const [loadingReplies, setLoadingReplies] = useState(false);
+  const [replyCount, setReplyCount] = useState(0);
 
+  // Fetch reply count when message ID is available
   useEffect(() => {
-    if (showReplies && message._id) {
-      console.log('Attempting to fetch replies for messageId:', message._id);
-      setLoadingReplies(true);
-      axios.get(`http://localhost:5000/api/messages/${message._id}/replies`, {
+    if (message._id) {
+      axios.get(`http://localhost:5000/api/messages/${message._id}/replies/count`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       })
-        .then(res => {
-          console.log('Replies received:', res.data.length);
-          setReplies(res.data);
-        })
-        .catch(err => {
-          console.error('Error fetching replies:', err);
-          setReplies([]);
-        })
-        .finally(() => setLoadingReplies(false));
+        .then(res => setReplyCount(res.data.count))
+        .catch(err => console.error('Error fetching reply count:', err));
     }
-  }, [showReplies, message._id]);
+  }, [message._id]);
 
   const formatTime = (timestamp) => {
     if (typeof timestamp === 'string') {
@@ -109,15 +99,6 @@ const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGro
     hasParent: !!message.parentMessage 
   });
 
-  const handleReply = () => {
-    console.log('Reply button clicked for message:', message._id);
-    if (typeof onReply === 'function') {
-      onReply();
-    } else {
-      console.error('onReply is not a function');
-    }
-  };
-
   return (
     <div className={`message ${isCurrentUser ? 'current-user' : 'other-user'}`}>
       <div className="message-content">
@@ -127,33 +108,14 @@ const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGro
         <div className="message-timestamp">{formatTime(message.timestamp)}</div>
         <div style={{ marginTop: 4, display: 'flex', gap: 8 }}>
           {message._id && (
-            <>
-              <button style={{ fontSize: 11, color: '#1976d2', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={handleReply}>Reply</button>
-              <button style={{ fontSize: 11, color: '#888', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} onClick={() => setShowReplies(v => !v)}>
-                {showReplies ? 'Hide Thread' : 'Show Thread'}
-              </button>
-            </>
+            <button 
+              style={{ fontSize: 11, color: '#1976d2', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              onClick={() => onReply(message)} // Open modal via Chat.js
+            >
+              Reply/Thread {replyCount > 0 ? `(${replyCount})` : ''}
+            </button>
           )}
         </div>
-        {showReplies && (
-          <div style={{ marginTop: 8, marginLeft: 16, borderLeft: '2px solid #e3e3e3', paddingLeft: 8 }}>
-            {loadingReplies ? (
-              <div style={{ fontSize: 12, color: '#888' }}>Loading replies...</div>
-            ) : replies.length === 0 ? (
-              <div style={{ fontSize: 12, color: '#888' }}>No replies yet.</div>
-            ) : (
-              replies.map(reply => (
-                <div key={reply._id} style={{ marginBottom: 8 }}>
-                  <b style={{ fontSize: 12 }}>{users.find(u => u._id === reply.sender)?.username || 'User'}:</b> {reply.content || (reply.media ? reply.media.name : 'Media')}
-                  {reply.media && reply.media.url && reply.media.type === 'image' && (
-                    <img src={reply.media.url} alt={reply.media.name || 'image'} style={{ maxWidth: 120, maxHeight: 80, borderRadius: 4, marginLeft: 8, verticalAlign: 'middle' }} />
-                  )}
-                  <span style={{ fontSize: 11, color: '#888', marginLeft: 8 }}>{formatTime(reply.timestamp)}</span>
-                </div>
-              ))
-            )}
-          </div>
-        )}
       </div>
     </div>
   );
