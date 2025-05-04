@@ -102,13 +102,13 @@ const Chat = () => {
     ws.current.onopen = () => {
       console.log('WebSocket Connected');
       // Authenticate with token, ensuring the socket is truly OPEN
-      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      if (ws.current.readyState === WebSocket.OPEN) {
         ws.current.send(JSON.stringify({
           type: 'auth',
           token: localStorage.getItem('token')
         }));
       } else {
-        console.warn('WebSocket opened, but state was not OPEN immediately. Auth message not sent.');
+        console.warn('WebSocket .onopen called, but state was not OPEN. Auth not sent.');
       }
     };
 
@@ -286,13 +286,21 @@ const Chat = () => {
   }), [messages, selectedUser, selectedGroup, currentUser]);
 
   const handleSendMessage = (message, media, parentMessageId = null) => {
-    if ((message.trim() === '' && !media) || (!selectedUser && !selectedGroup)) return;
+    console.log('handleSendMessage called:', { message, media, parentMessageId });
+    if ((message.trim() === '' && !media) || (!selectedUser && !selectedGroup)) {
+      console.log('handleSendMessage: Condition not met, returning.', { message, media, selectedUser, selectedGroup });
+      return;
+    }
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      console.log('handleSendMessage: Sending via WebSocket');
       const clientTempId = uuidv4();
       const parentMessage = parentMessageId || null;
+      let messageData = {};
+      let optimisticMessage = {};
+
       if (selectedGroup) {
         // Group message
-        const messageData = {
+        messageData = {
           type: 'message',
           groupId: selectedGroup._id,
           content: message,
@@ -300,8 +308,7 @@ const Chat = () => {
           media,
           parentMessage
         };
-        ws.current.send(JSON.stringify(messageData));
-        setMessages(prev => mergeMessages(prev, [{
+        optimisticMessage = {
           sender: currentUser,
           groupId: selectedGroup._id,
           content: message,
@@ -309,10 +316,10 @@ const Chat = () => {
           clientTempId,
           media,
           parentMessage
-        }]));
+        };
       } else if (selectedUser) {
         // Direct message
-        const messageData = {
+        messageData = {
           type: 'message',
           receiverId: selectedUser._id,
           content: message,
@@ -320,8 +327,7 @@ const Chat = () => {
           media,
           parentMessage
         };
-        ws.current.send(JSON.stringify(messageData));
-        setMessages(prev => mergeMessages(prev, [{
+        optimisticMessage = {
           sender: currentUser,
           receiver: selectedUser._id,
           content: message,
@@ -329,9 +335,17 @@ const Chat = () => {
           clientTempId,
           media,
           parentMessage
-        }]));
+        };
       }
+      
+      console.log('Sending messageData:', messageData);
+      console.log('Adding optimisticMessage:', optimisticMessage);
+      ws.current.send(JSON.stringify(messageData));
+      setMessages(prev => mergeMessages(prev, [optimisticMessage]));
+      
       setReplyToMessage(null);
+    } else {
+      console.warn('handleSendMessage: WebSocket not ready or available.');
     }
   };
 

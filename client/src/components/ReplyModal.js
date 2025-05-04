@@ -35,6 +35,7 @@ const ReplyModal = ({ message, onClose, onSendReply }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    console.log('Reply handleSubmit:', { replyContent, replyFile });
     if (replyContent.trim() || replyFile) {
       if (replyFile) {
         const reader = new FileReader();
@@ -44,14 +45,18 @@ const ReplyModal = ({ message, onClose, onSendReply }) => {
             type: replyFile.type.startsWith('image') ? 'image' : 'file',
             name: replyFile.name
           };
+          console.log('Reply sending with media:', { replyContent, media });
           onSendReply(replyContent, message._id, media);
           setReplyFile(null);
         };
         reader.readAsDataURL(replyFile);
       } else {
+        console.log('Reply sending without media:', { replyContent });
         onSendReply(replyContent, message._id, null);
       }
       setReplyContent('');
+    } else {
+      console.log('Reply handleSubmit: Both content and file are empty, not sending.');
     }
   };
 
