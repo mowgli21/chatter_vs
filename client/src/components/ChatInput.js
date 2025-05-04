@@ -3,11 +3,25 @@ import './ChatInput.css';
 
 const ChatInput = ({ onSendMessage, onTyping }) => {
   const [message, setMessage] = useState('');
+  const [file, setFile] = useState(null);
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (message.trim()) {
-      onSendMessage(message);
+    if (message.trim() || file) {
+      if (file) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          onSendMessage(message, {
+            url: reader.result,
+            type: file.type.startsWith('image') ? 'image' : 'file',
+            name: file.name
+          });
+          setFile(null);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        onSendMessage(message);
+      }
       setMessage('');
     }
   };
@@ -15,6 +29,10 @@ const ChatInput = ({ onSendMessage, onTyping }) => {
   const handleChange = (e) => {
     setMessage(e.target.value);
     if (onTyping) onTyping();
+  };
+
+  const handleFileChange = (e) => {
+    setFile(e.target.files[0]);
   };
 
   return (
@@ -26,9 +44,13 @@ const ChatInput = ({ onSendMessage, onTyping }) => {
         placeholder="Type a message..."
         className="chat-input"
       />
+      <input type="file" onChange={handleFileChange} className="file-input" />
       <button type="submit" className="send-button">
         Send
       </button>
+      {file && (
+        <span style={{ fontSize: 12, marginLeft: 8 }}>{file.name}</span>
+      )}
     </form>
   );
 };

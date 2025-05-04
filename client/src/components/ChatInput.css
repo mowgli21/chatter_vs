@@ -34,4 +34,13 @@
 
 .send-button:hover {
   background-color: #0056b3;
+}
+
+.file-input {
+  width: 32px;
+  min-width: 32px;
+  max-width: 32px;
+  padding: 0;
+  margin-left: 8px;
+  cursor: pointer;
 } 

@@ -72,13 +72,19 @@ wss.on('connection', (ws) => {
 
         if (data.groupId) {
           // GROUP MESSAGE
+          if (data.media) {
+            console.log('Received media:', data.media.type, data.media.name, data.media.url ? data.media.url.slice(0, 30) : '');
+          }
           const message = new Message({
             sender: userId,
             groupId: data.groupId,
             content: data.content,
-            timestamp: new Date()
+            timestamp: new Date(),
+            media: data.media || undefined
           });
           await message.save();
+          // Fetch the saved message to ensure media is populated as stored
+          const savedMessage = await Message.findById(message._id);
 
           // Fetch group members
           const group = await Group.findById(data.groupId);
@@ -91,12 +97,13 @@ wss.on('connection', (ws) => {
                     sock.send(JSON.stringify({
                       type: 'message',
                       message: {
-                        _id: message._id,
+                        _id: savedMessage._id,
                         sender: userId,
                         groupId: data.groupId,
                         content: data.content,
-                        timestamp: message.timestamp,
-                        clientTempId: data.clientTempId
+                        timestamp: savedMessage.timestamp,
+                        clientTempId: data.clientTempId,
+                        media: savedMessage.media
                       }
                     }));
                   }
@@ -106,13 +113,19 @@ wss.on('connection', (ws) => {
           }
         } else {
           // DIRECT MESSAGE
+          if (data.media) {
+            console.log('Received media:', data.media.type, data.media.name, data.media.url ? data.media.url.slice(0, 30) : '');
+          }
           const message = new Message({
             sender: userId,
             receiver: data.receiverId,
             content: data.content,
-            timestamp: new Date()
+            timestamp: new Date(),
+            media: data.media || undefined
           });
           await message.save();
+          // Fetch the saved message to ensure media is populated as stored
+          const savedMessage = await Message.findById(message._id);
 
           // Send message to receiver if online
           const receiverSockets = clients.get(data.receiverId);
@@ -123,12 +136,13 @@ wss.on('connection', (ws) => {
                 sock.send(JSON.stringify({
                   type: 'message',
                   message: {
-                    _id: message._id,
+                    _id: savedMessage._id,
                     sender: userId,
                     receiver: data.receiverId,
                     content: data.content,
-                    timestamp: message.timestamp,
-                    clientTempId: data.clientTempId
+                    timestamp: savedMessage.timestamp,
+                    clientTempId: data.clientTempId,
+                    media: savedMessage.media
                   }
                 }));
               }
@@ -145,12 +159,13 @@ wss.on('connection', (ws) => {
                 sock.send(JSON.stringify({
                   type: 'message',
                   message: {
-                    _id: message._id,
+                    _id: savedMessage._id,
                     sender: userId,
                     receiver: data.receiverId,
                     content: data.content,
-                    timestamp: message.timestamp,
-                    clientTempId: data.clientTempId
+                    timestamp: savedMessage.timestamp,
+                    clientTempId: data.clientTempId,
+                    media: savedMessage.media
                   }
                 }));
               }
@@ -195,13 +210,17 @@ wss.on('connection', (ws) => {
         }
       } else if (data.type === 'read') {
         if (!userId || !data.messageIds) return;
-        // Mark messages as read by this user
-        await Message.updateMany(
-          { _id: { $in: data.messageIds } },
-          { $addToSet: { readBy: userId } }
-        );
-        // Fetch updated messages
-        const updatedMessages = await Message.find({ _id: { $in: data.messageIds } });
+        // Mark messages as read by this user, but only if not already present
+        const updatedIds = [];
+        for (const id of data.messageIds) {
+          const message = await Message.findById(id);
+          if (message && !message.readBy.includes(userId)) {
+            message.readBy.push(userId);
+            await message.save();
+            updatedIds.push(id);
+          }
+        }
+        if (updatedIds.length === 0) return; // No updates, don't broadcast
         // Broadcast read status
         if (data.groupId) {
           // Group: notify all group members
@@ -214,7 +233,7 @@ wss.on('connection', (ws) => {
                   if (sock.readyState === WebSocket.OPEN) {
                     sock.send(JSON.stringify({
                       type: 'read',
-                      messageIds: data.messageIds,
+                      messageIds: updatedIds,
                       userId
                     }));
                   }
@@ -231,7 +250,7 @@ wss.on('connection', (ws) => {
                 if (sock.readyState === WebSocket.OPEN) {
                   sock.send(JSON.stringify({
                     type: 'read',
-                    messageIds: data.messageIds,
+                    messageIds: updatedIds,
                     userId
                   }));
                 }

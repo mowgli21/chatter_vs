@@ -1,7 +1,7 @@
 import React from 'react';
 import './Message.css';
 
-const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGroup, users = [] }) => {
+const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGroup, users = [], media }) => {
   const formatTime = (timestamp) => {
     if (typeof timestamp === 'string') {
       return timestamp;
@@ -30,10 +30,28 @@ const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGro
     }
   }
 
+  // Media preview logic
+  let mediaPreview = null;
+  const m = media || message.media;
+  if (m && m.url) {
+    if (m.type === 'image') {
+      mediaPreview = (
+        <img src={m.url} alt={m.name || 'image'} style={{ maxWidth: 180, maxHeight: 120, borderRadius: 6, marginTop: 6 }} />
+      );
+    } else {
+      mediaPreview = (
+        <a href={m.url} download={m.name} style={{ fontSize: 12, color: '#1976d2', marginTop: 6, display: 'inline-block' }}>
+          {m.name || 'Download file'}
+        </a>
+      );
+    }
+  }
+
   return (
     <div className={`message ${isCurrentUser ? 'current-user' : 'other-user'}`}>
       <div className="message-content">
         <div className="message-text">{message.content} {readIndicator}</div>
+        {mediaPreview}
         <div className="message-timestamp">{formatTime(message.timestamp)}</div>
       </div>
     </div>

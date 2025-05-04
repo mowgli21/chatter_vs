@@ -32,6 +32,7 @@ const Chat = () => {
   const [profilePicFile, setProfilePicFile] = useState(null);
   const [profileForm, setProfileForm] = useState({ username: '', email: '', profilePic: '' });
   const [typingUsers, setTypingUsers] = useState({}); // {userId: timestamp} for direct, {groupId: {userId: timestamp}} for group
+  const [readBy, setReadBy] = useState({}); // {messageId: [userId, ...]}
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -88,6 +89,15 @@ const Chat = () => {
             [data.from]: Date.now()
           }));
         }
+      } else if (data.type === 'read') {
+        // Update readBy state for messages
+        setReadBy(prev => {
+          const updated = { ...prev };
+          data.messageIds.forEach(id => {
+            updated[id] = updated[id] ? Array.from(new Set([...updated[id], data.userId])) : [data.userId];
+          });
+          return updated;
+        });
       }
     };
 
@@ -209,8 +219,8 @@ const Chat = () => {
         )
       : [];
 
-  const handleSendMessage = (message) => {
-    if (message.trim() === '' || (!selectedUser && !selectedGroup)) return;
+  const handleSendMessage = (message, media) => {
+    if ((message.trim() === '' && !media) || (!selectedUser && !selectedGroup)) return;
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       const clientTempId = uuidv4();
       if (selectedGroup) {
@@ -219,7 +229,8 @@ const Chat = () => {
           type: 'message',
           groupId: selectedGroup._id,
           content: message,
-          clientTempId
+          clientTempId,
+          media
         };
         ws.current.send(JSON.stringify(messageData));
         // Optimistically add the message to the UI
@@ -228,7 +239,8 @@ const Chat = () => {
           groupId: selectedGroup._id,
           content: message,
           timestamp: new Date(),
-          clientTempId
+          clientTempId,
+          media
         }]));
       } else if (selectedUser) {
         // Direct message
@@ -236,7 +248,8 @@ const Chat = () => {
           type: 'message',
           receiverId: selectedUser._id,
           content: message,
-          clientTempId
+          clientTempId,
+          media
         };
         ws.current.send(JSON.stringify(messageData));
         // Optimistically add the message to the UI
@@ -245,7 +258,8 @@ const Chat = () => {
           receiver: selectedUser._id,
           content: message,
           timestamp: new Date(),
-          clientTempId
+          clientTempId,
+          media
         }]));
       }
     }
@@ -437,6 +451,20 @@ const Chat = () => {
     typingIndicator = <div style={{ fontSize: 12, color: '#888', margin: '4px 0 0 8px' }}>{selectedUser.username} typing...</div>;
   }
 
+  // Send read event when messages are viewed
+  useEffect(() => {
+    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+    // Only send read event for messages not yet read by current user
+    let unreadMessages = filteredMessages.filter(m => m._id && !(readBy[m._id] || m.readBy || []).includes(currentUser) && m.sender !== currentUser);
+    if (unreadMessages.length === 0) return;
+    let messageIds = unreadMessages.map(m => m._id);
+    if (selectedGroup) {
+      ws.current.send(JSON.stringify({ type: 'read', messageIds, groupId: selectedGroup._id }));
+    } else if (selectedUser) {
+      ws.current.send(JSON.stringify({ type: 'read', messageIds, receiverId: selectedUser._id }));
+    }
+  }, [filteredMessages, selectedUser, selectedGroup, currentUser, readBy]);
+
   return (
     <div className="chat-container compact">
       <div className="chat-header compact">
@@ -533,6 +561,11 @@ const Chat = () => {
                     key={message._id || message.clientTempId || index}
                     message={message}
                     isCurrentUser={message.sender === currentUser}
+                    readBy={readBy[message._id] || message.readBy || []}
+                    currentUser={currentUser}
+                    selectedGroup={selectedGroup}
+                    users={users}
+                    media={message.media}
                   />
                 ))}
                 <div ref={messagesEndRef} />
