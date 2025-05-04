@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './Message.css';
 import axios from 'axios';
 
-const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGroup, users = [], media, onReply }) => {
+const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGroup, users = [], media, onReply, onReact }) => {
   const [replyCount, setReplyCount] = useState(0);
 
   // Fetch reply count when message ID is available
@@ -117,6 +117,20 @@ const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGro
 
   const sender = users.find(u => u._id === message.sender);
 
+  const handleReaction = (reactionType) => {
+    if (!message._id || !onReact) return;
+    onReact(message._id, reactionType);
+  };
+
+  const renderReactions = () => {
+    if (!message.reactions) return null;
+    return Array.from(message.reactions.entries()).map(([type, users]) => (
+      <span key={type} style={{ marginRight: 8 }}>
+        {type} {users.length}
+      </span>
+    ));
+  };
+
   return (
     <div className={`message ${isCurrentUser ? 'current-user' : 'other-user'}`}>
       {/* Avatar for other users */} 
@@ -139,6 +153,13 @@ const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGro
         {mediaPreview}
         <div className="message-timestamp">{formatTime(message.timestamp)}</div>
         <div style={{ marginTop: 4, display: 'flex', gap: 8 }}>
+          {renderReactions()}
+          <button onClick={() => handleReaction('like')} style={{ fontSize: 11, color: '#1976d2', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            👍
+          </button>
+          <button onClick={() => handleReaction('love')} style={{ fontSize: 11, color: '#1976d2', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            ❤️
+          </button>
           {message._id && (
             <button 
               style={{ fontSize: 11, color: '#1976d2', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}

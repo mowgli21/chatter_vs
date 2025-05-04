@@ -18,7 +18,12 @@ const messageSchema = new mongoose.Schema({
     type: { type: String }, // e.g., 'image', 'file', 'video', etc.
     name: { type: String }  // original filename
   },
-  parentMessage: { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null }
-});
+  parentMessage: { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null },
+  reactions: {
+    type: Map,
+    of: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    default: {}
+  }
+}, { timestamps: true });
 
 module.exports = mongoose.model('Message', messageSchema); 

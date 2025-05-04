@@ -22,21 +22,59 @@ const Chat = () => {
   const [currentUsername, setCurrentUsername] = useState('');
   const [showGroupProfile, setShowGroupProfile] = useState(false);
   const [groupProfile, setGroupProfile] = useState(null);
-  const [groupProfileLoading, setGroupProfileLoading] = useState(false);
   const [groupProfileError, setGroupProfileError] = useState('');
-  const [groupPicFile, setGroupPicFile] = useState(null);
   const [addMemberId, setAddMemberId] = useState('');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
-  const [profilePicFile, setProfilePicFile] = useState(null);
   const [profileForm, setProfileForm] = useState({ username: '', email: '', profilePic: '' });
   const [typingUsers, setTypingUsers] = useState({}); // {userId: timestamp} for direct, {groupId: {userId: timestamp}} for group
   const [readBy, setReadBy] = useState({}); // {messageId: [userId, ...]}
   const [replyToMessage, setReplyToMessage] = useState(null);
   const [showReplyModal, setShowReplyModal] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState([]); // Store IDs of users blocked BY current user
+
+  // Move mergeMessages definition here (before the main useEffect)
+  const mergeMessages = useCallback((oldMessages, newMessages) => {
+    const map = new Map();
+    // First, add all old messages
+    oldMessages.forEach(msg => {
+      if (msg._id) {
+        map.set(msg._id, msg);
+      } else if (msg.clientTempId) {
+        map.set(msg.clientTempId, msg);
+      } else {
+        map.set(JSON.stringify([msg.sender, msg.receiver, msg.content, msg.timestamp]), msg);
+      }
+    });
+    // Now, add/replace with new messages
+    newMessages.forEach(msg => {
+      // Ensure sender and receiver are present
+      if (!msg.receiver && selectedUser) {
+        msg.receiver = selectedUser._id;
+      }
+      if (!msg.sender && currentUser) {
+        msg.sender = currentUser;
+      }
+      if (msg._id && msg.clientTempId) {
+        // Remove any optimistic message with the same clientTempId
+        map.delete(msg.clientTempId);
+        // Merge with existing if present
+        const existing = map.get(msg._id) || {};
+        map.set(msg._id, { ...existing, ...msg, media: msg.media || existing.media });
+      } else if (msg._id) {
+        const existing = map.get(msg._id) || {};
+        map.set(msg._id, { ...existing, ...msg, media: msg.media || existing.media });
+      } else if (msg.clientTempId) {
+        const existing = map.get(msg.clientTempId) || {};
+        map.set(msg.clientTempId, { ...existing, ...msg, media: msg.media || existing.media });
+      } else {
+        map.set(JSON.stringify([msg.sender, msg.receiver, msg.content, msg.timestamp]), msg);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  }, [selectedUser, currentUser]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -63,18 +101,22 @@ const Chat = () => {
 
     ws.current.onopen = () => {
       console.log('WebSocket Connected');
-      // Authenticate with token
-      ws.current.send(JSON.stringify({
-        type: 'auth',
-        token: localStorage.getItem('token')
-      }));
+      // Authenticate with token, ensuring the socket is truly OPEN
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        ws.current.send(JSON.stringify({
+          type: 'auth',
+          token: localStorage.getItem('token')
+        }));
+      } else {
+        console.warn('WebSocket opened, but state was not OPEN immediately. Auth message not sent.');
+      }
     };
 
     ws.current.onmessage = (event) => {
       const data = JSON.parse(event.data);
       console.log('WebSocket message received on client:', data);
       if (data.type === 'message') {
-        setMessages(prev => mergeMessages(prev, [data.message]));
+        setMessages(prev => mergeMessages(prev, [{ ...data.message, reactions: new Map(data.message.reactions) }]));
       } else if (data.type === 'onlineUsers') {
         setUsers(data.users);
       } else if (data.type === 'typing') {
@@ -106,6 +148,13 @@ const Chat = () => {
         console.log('Received delete message event for:', data.messageId);
         setMessages(prev => prev.filter(msg => msg._id !== data.messageId));
         // TODO: Consider updating reply counts or removing replies from state if they were deleted.
+      } else if (data.type === 'reactionUpdate') {
+        setMessages(prevMessages => prevMessages.map(msg => {
+          if (msg._id === data.messageId) {
+            return { ...msg, reactions: new Map(data.reactions) };
+          }
+          return msg;
+        }));
       }
     };
 
@@ -169,48 +218,7 @@ const Chat = () => {
       }
       ws.current = null;
     };
-  }, []);
-
-  // Helper to merge and deduplicate messages by _id or clientTempId
-  const mergeMessages = useCallback((oldMessages, newMessages) => {
-    const map = new Map();
-    // First, add all old messages
-    oldMessages.forEach(msg => {
-      if (msg._id) {
-        map.set(msg._id, msg);
-      } else if (msg.clientTempId) {
-        map.set(msg.clientTempId, msg);
-      } else {
-        map.set(JSON.stringify([msg.sender, msg.receiver, msg.content, msg.timestamp]), msg);
-      }
-    });
-    // Now, add/replace with new messages
-    newMessages.forEach(msg => {
-      // Ensure sender and receiver are present
-      if (!msg.receiver && selectedUser) {
-        msg.receiver = selectedUser._id;
-      }
-      if (!msg.sender && currentUser) {
-        msg.sender = currentUser;
-      }
-      if (msg._id && msg.clientTempId) {
-        // Remove any optimistic message with the same clientTempId
-        map.delete(msg.clientTempId);
-        // Merge with existing if present
-        const existing = map.get(msg._id) || {};
-        map.set(msg._id, { ...existing, ...msg, media: msg.media || existing.media });
-      } else if (msg._id) {
-        const existing = map.get(msg._id) || {};
-        map.set(msg._id, { ...existing, ...msg, media: msg.media || existing.media });
-      } else if (msg.clientTempId) {
-        const existing = map.get(msg.clientTempId) || {};
-        map.set(msg.clientTempId, { ...existing, ...msg, media: msg.media || existing.media });
-      } else {
-        map.set(JSON.stringify([msg.sender, msg.receiver, msg.content, msg.timestamp]), msg);
-      }
-    });
-    return Array.from(map.values()).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  }, [selectedUser, currentUser]);
+  }, [currentUser, mergeMessages]);
 
   const isSelectedUserBlocked = useMemo(() => {
     return selectedUser && blockedUsers.includes(selectedUser._id);
@@ -224,17 +232,26 @@ const Chat = () => {
           const response = await axios.get(`http://localhost:5000/api/groups/${selectedGroup._id}/messages`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
           });
-          setMessages(prev => mergeMessages(prev, response.data));
+          // Convert reactions from Object to Map for each message
+          const messagesWithMapReactions = response.data.map(msg => ({
+            ...msg,
+            reactions: new Map(Object.entries(msg.reactions || {}))
+          }));
+          setMessages(prev => mergeMessages(prev, messagesWithMapReactions));
         } catch (error) {
           console.error('Error fetching group messages:', error);
         }
-      } else if (selectedUser) { // Fetch messages regardless of block status
+      } else if (selectedUser) {
         try {
           const response = await axios.get(`http://localhost:5000/api/messages/${selectedUser._id}`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
           });
-          // Merge fetched messages - block status only affects input/sending
-          setMessages(prev => mergeMessages(prev, response.data)); 
+          // Convert reactions from Object to Map for each message
+          const messagesWithMapReactions = response.data.map(msg => ({
+            ...msg,
+            reactions: new Map(Object.entries(msg.reactions || {}))
+          }));
+          setMessages(prev => mergeMessages(prev, messagesWithMapReactions));
         } catch (error) {
           // Handle cases where messages might be restricted by backend due to blocking
           if (error.response && error.response.status === 403) {
@@ -252,7 +269,7 @@ const Chat = () => {
       }
     };
     fetchMessages();
-  }, [selectedUser, selectedGroup, mergeMessages, currentUser]); // Removed isSelectedUserBlocked from dependencies
+  }, [selectedUser, selectedGroup, mergeMessages, currentUser]);
 
   // Filter messages for selected group or user, excluding replies
   const filteredMessages = useMemo(() => messages.filter(msg => {
@@ -345,7 +362,6 @@ const Chat = () => {
   // Fetch group profile
   const openGroupProfile = async () => {
     if (!selectedGroup) return;
-    setGroupProfileLoading(true);
     setGroupProfileError('');
     try {
       const response = await axios.get(`http://localhost:5000/api/groups/${selectedGroup._id}`, {
@@ -355,8 +371,6 @@ const Chat = () => {
       setShowGroupProfile(true);
     } catch (error) {
       setGroupProfileError('Failed to load group profile');
-    } finally {
-      setGroupProfileLoading(false);
     }
   };
 
@@ -537,6 +551,13 @@ const Chat = () => {
     setReplyToMessage(null);
   };
 
+  // Handle adding/removing reactions
+  const handleReact = (messageId, reactionType) => {
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({ type: 'react', messageId, reactionType }));
+    }
+  };
+
   // Callback for UserList to update blocked state
   const handleBlockToggle = useCallback(async (userIdToToggle) => {
     const isBlocked = blockedUsers.includes(userIdToToggle);
@@ -668,6 +689,7 @@ const Chat = () => {
                     users={users}
                     media={message.media}
                     onReply={handleOpenReplyModal}
+                    onReact={handleReact}
                   />
                 ))}
                 <div ref={messagesEndRef} />

@@ -287,6 +287,45 @@ wss.on('connection', (ws) => {
             }
           });
         }
+      } else if (data.type === 'react') {
+        if (!userId) {
+          ws.close();
+          return;
+        }
+
+        const { messageId, reactionType } = data;
+        const message = await Message.findById(messageId);
+        if (!message) {
+          console.log('Message not found for reaction:', messageId);
+          return;
+        }
+
+        // Add or remove the user's reaction
+        const userReactions = message.reactions.get(reactionType) || [];
+        const userIndex = userReactions.indexOf(userId);
+        if (userIndex === -1) {
+          userReactions.push(userId);
+        } else {
+          userReactions.splice(userIndex, 1);
+        }
+        message.reactions.set(reactionType, userReactions);
+
+        await message.save();
+
+        // Broadcast the reaction update to all clients
+        const broadcastData = {
+          type: 'reactionUpdate',
+          messageId: messageId,
+          reactions: Array.from(message.reactions.entries())
+        };
+
+        clients.forEach((sockets, clientId) => {
+          sockets.forEach(sock => {
+            if (sock.readyState === WebSocket.OPEN) {
+              sock.send(JSON.stringify(broadcastData));
+            }
+          });
+        });
       }
     } catch (error) {
       console.error('WebSocket message error:', error);
