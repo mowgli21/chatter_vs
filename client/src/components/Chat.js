@@ -380,18 +380,27 @@ const Chat = () => {
 
   // Leave group
   const handleLeaveGroup = async () => {
+    if (!selectedGroup || !window.confirm(`Are you sure you want to leave the group "${selectedGroup.name}"?`)) {
+      return;
+    }
     try {
       await axios.post(`http://localhost:5000/api/groups/${selectedGroup._id}/leave`, {}, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
+      // Close the profile modal
       setShowGroupProfile(false);
+      // Deselect the group
       setSelectedGroup(null);
-      // Optionally refresh group list
-      const response = await axios.get('http://localhost:5000/api/groups', {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      setGroups(response.data);
-    } catch {
+      // Remove the group from the local state
+      setGroups(prevGroups => prevGroups.filter(g => g._id !== selectedGroup._id));
+      // Optionally, fetch groups again if you prefer server confirmation, 
+      // but removing from local state is faster for UI.
+      // const response = await axios.get('http://localhost:5000/api/groups', {
+      //   headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      // });
+      // setGroups(response.data);
+    } catch (error) {
+      console.error('Failed to leave group:', error);
       alert('Failed to leave group');
     }
   };
@@ -572,7 +581,7 @@ const Chat = () => {
             <h3 style={{ fontSize: 15, margin: '10px 0 6px 0' }}>Groups</h3>
             <div className="groups">
               {groups.map(group => {
-                console.log('Rendering group:', group); // Log group object
+                console.log('Rendering group in list:', group); // Log group data
                 return (
                   <div
                     key={group._id}
@@ -591,7 +600,7 @@ const Chat = () => {
                     />
                     {group.name}
                   </div>
-                )
+                );
               })}
             </div>
           </div>
