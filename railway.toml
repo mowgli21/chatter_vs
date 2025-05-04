@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+buildCommand = "cd server ; npm install ; cd ../client ; npm install ; npm run build"
+
+[deploy]
+startCommand = "cd server ; npm start"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+numReplicas = 2
+
+[deploy.envs]
+NODE_ENV = "production"
