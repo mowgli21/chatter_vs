@@ -331,7 +331,7 @@ const authenticateToken = (req, res, next) => {
 // Protected routes
 app.get('/api/users', authenticateToken, async (req, res) => {
   try {
-    const users = await User.find({ _id: { $ne: req.user.userId } }, 'username online _id');
+    const users = await User.find({ _id: { $ne: req.user.userId } }, 'username online _id profilePic');
     res.json(users);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -345,7 +345,9 @@ app.get('/api/messages/:userId', authenticateToken, async (req, res) => {
         { sender: req.user.userId, receiver: req.params.userId },
         { sender: req.params.userId, receiver: req.user.userId }
       ]
-    }).sort('timestamp');
+    }).populate('sender', 'username profilePic')
+      .populate('receiver', 'username profilePic')
+      .sort('timestamp');
     
     res.json(messages);
   } catch (error) {
@@ -365,7 +367,7 @@ app.get('/api/messages/:messageId/replies', authenticateToken, async (req, res) 
     
     // Populate sender information for replies
     const replies = await Message.find({ parentMessage: req.params.messageId })
-                                   .populate('sender', 'username')
+                                   .populate('sender', 'username profilePic')
                                    .sort('timestamp');
                                    
     console.log('Replies found:', replies.length);

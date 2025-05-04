@@ -90,12 +90,20 @@ const ReplyModal = ({ message, onClose, onSendReply }) => {
             <div style={{ fontSize: 12, color: '#888' }}>No replies yet.</div>
           ) : (
             replies.map(reply => (
-              <div key={reply._id} style={{ marginBottom: 6, fontSize: 12 }}>
-                <b>{reply.sender?.username || 'User'}:</b> {reply.content || (reply.media ? reply.media.name : 'Media')}
-                {reply.media?.url && reply.media.type === 'image' && (
-                  <img src={reply.media.url} alt={reply.media.name || 'image'} style={{ maxWidth: 60, maxHeight: 40, borderRadius: 4, marginLeft: 8, verticalAlign: 'middle' }} />
-                )}
-                <span style={{ fontSize: 11, color: '#aaa', marginLeft: 8 }}>{formatTime(reply.timestamp)}</span>
+              <div key={reply._id} style={{ marginBottom: 6, fontSize: 12, display: 'flex', alignItems: 'flex-start' }}>
+                {/* Reply Avatar */}
+                <img 
+                  src={reply.sender?.profilePic || 'https://via.placeholder.com/24?text=' + (reply.sender?.username?.charAt(0).toUpperCase() || 'U')}
+                  alt={reply.sender?.username || 'User'}
+                  style={{ width: 24, height: 24, borderRadius: '50%', marginRight: 6 }}
+                />
+                <div>
+                  <b>{reply.sender?.username || 'User'}:</b> {reply.content || (reply.media ? reply.media.name : 'Media')}
+                  {reply.media?.url && reply.media.type === 'image' && (
+                    <img src={reply.media.url} alt={reply.media.name || 'image'} style={{ maxWidth: 60, maxHeight: 40, borderRadius: 4, marginLeft: 8, verticalAlign: 'middle' }} />
+                  )}
+                  <span style={{ fontSize: 11, color: '#aaa', marginLeft: 8 }}>{formatTime(reply.timestamp)}</span>
+                </div>
               </div>
             ))
           )}

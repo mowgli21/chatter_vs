@@ -122,6 +122,7 @@ const Chat = () => {
         const response = await axios.get('http://localhost:5000/api/users', {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
+        console.log('Fetched users:', response.data);
         setUsers(response.data);
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -570,19 +571,28 @@ const Chat = () => {
           <div className="group-list">
             <h3 style={{ fontSize: 15, margin: '10px 0 6px 0' }}>Groups</h3>
             <div className="groups">
-              {groups.map(group => (
-                <div
-                  key={group._id}
-                  className={`group-item ${selectedGroup?._id === group._id ? 'selected' : ''}`}
-                  onClick={() => {
-                    setSelectedGroup(group);
-                    setSelectedUser(null);
-                  }}
-                  style={{ cursor: 'pointer', padding: '6px', borderRadius: '5px', marginBottom: 3, background: selectedGroup?._id === group._id ? '#e3f2fd' : '#fff', fontSize: 13 }}
-                >
-                  {group.name}
-                </div>
-              ))}
+              {groups.map(group => {
+                console.log('Rendering group:', group); // Log group object
+                return (
+                  <div
+                    key={group._id}
+                    className={`group-item ${selectedGroup?._id === group._id ? 'selected' : ''}`}
+                    onClick={() => {
+                      setSelectedGroup(group);
+                      setSelectedUser(null);
+                    }}
+                    style={{ cursor: 'pointer', padding: '6px', borderRadius: '5px', marginBottom: 3, background: selectedGroup?._id === group._id ? '#e3f2fd' : '#fff', fontSize: 13, display: 'flex', alignItems: 'center' }}
+                  >
+                    {/* Group Avatar */}
+                    <img 
+                      src={group.picture || 'https://via.placeholder.com/30?text=' + group.name.charAt(0).toUpperCase()}
+                      alt={group.name}
+                      style={{ width: 30, height: 30, borderRadius: 8, marginRight: 8, objectFit: 'cover' }} 
+                    />
+                    {group.name}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>

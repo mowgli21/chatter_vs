@@ -40,7 +40,8 @@ router.post('/', authenticateToken, async (req, res) => {
 // Get all groups for the current user
 router.get('/', authenticateToken, async (req, res) => {
   try {
-    const groups = await Group.find({ members: req.user.userId });
+    // Include the picture field
+    const groups = await Group.find({ members: req.user.userId }, 'name picture');
     res.json(groups);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -80,7 +81,9 @@ router.post('/:groupId/remove', authenticateToken, async (req, res) => {
 // Get messages for a group
 router.get('/:groupId/messages', authenticateToken, async (req, res) => {
   try {
-    const messages = await Message.find({ groupId: req.params.groupId }).sort('timestamp');
+    const messages = await Message.find({ groupId: req.params.groupId })
+                                    .populate('sender', 'username profilePic')
+                                    .sort('timestamp');
     res.json(messages);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -119,7 +122,8 @@ router.post('/:groupId/leave', authenticateToken, async (req, res) => {
 // Get group details
 router.get('/:groupId', authenticateToken, async (req, res) => {
   try {
-    const group = await Group.findById(req.params.groupId).populate('members', 'username email');
+    const group = await Group.findById(req.params.groupId)
+                           .populate('members', 'username email profilePic');
     res.json(group);
   } catch (error) {
     res.status(400).json({ error: error.message });

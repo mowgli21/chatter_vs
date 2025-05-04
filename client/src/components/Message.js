@@ -115,9 +115,25 @@ const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGro
     }
   };
 
+  const sender = users.find(u => u._id === message.sender);
+
   return (
     <div className={`message ${isCurrentUser ? 'current-user' : 'other-user'}`}>
+      {/* Avatar for other users */} 
+      {!isCurrentUser && (
+        <img 
+          src={sender?.profilePic || 'https://via.placeholder.com/30?text=' + (sender?.username?.charAt(0).toUpperCase() || 'U')}
+          alt={sender?.username || 'User'}
+          style={{ width: 30, height: 30, borderRadius: '50%', marginRight: 8, marginTop: 5, alignSelf: 'flex-start' }}
+        />
+      )}
       <div className="message-content">
+        {/* Optional: Show sender name for group messages from others */} 
+        {selectedGroup && !isCurrentUser && sender && (
+          <div style={{ fontSize: 11, fontWeight: 'bold', color: '#555', marginBottom: 3 }}>
+            {sender.username}
+          </div>
+        )}
         {parentPreview}
         <div className="message-text">{message.content} {readIndicator}</div>
         {mediaPreview}
@@ -141,6 +157,14 @@ const Message = ({ message, isCurrentUser, readBy = [], currentUser, selectedGro
           )}
         </div>
       </div>
+      {/* Avatar for current user */}
+      {isCurrentUser && (
+        <img 
+          src={currentUser.profilePic || 'https://via.placeholder.com/30?text=' + (currentUser.username?.charAt(0).toUpperCase() || 'U')}
+          alt={currentUser.username || 'You'}
+          style={{ width: 30, height: 30, borderRadius: '50%', marginLeft: 8, marginTop: 5, alignSelf: 'flex-start' }}
+        />
+      )}
     </div>
   );
 };

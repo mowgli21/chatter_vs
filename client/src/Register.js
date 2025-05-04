@@ -6,16 +6,29 @@ const Register = ({ onRegisterSuccess }) => {
   const [password, setPassword] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [username, setUsername] = useState('');
+  const [profilePic, setProfilePic] = useState('');
   const [error, setError] = useState('');
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setProfilePic(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     try {
       const response = await axios.post('http://localhost:5000/api/auth/register', {
         email,
         password,
         phoneNumber,
-        username
+        username,
+        profilePic
       });
       
       // Call the success handler with the token
@@ -65,6 +78,11 @@ const Register = ({ onRegisterSuccess }) => {
             placeholder="Password"
             required
           />
+        </div>
+        <div className="form-group">
+          <label>Profile Picture (Optional):</label>
+          <input type="file" accept="image/*" onChange={handleFileChange} />
+          {profilePic && <img src={profilePic} alt="Preview" style={{ width: 50, height: 50, borderRadius: '50%', marginTop: 5 }}/>}
         </div>
         <button type="submit">Register</button>
       </form>
