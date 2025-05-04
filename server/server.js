@@ -70,6 +70,10 @@ wss.on('connection', (ws) => {
           return;
         }
 
+        if (data.parentMessage) {
+          console.log('Message with parentMessage:', data.parentMessage);
+        }
+
         if (data.groupId) {
           // GROUP MESSAGE
           if (data.media) {
@@ -80,7 +84,8 @@ wss.on('connection', (ws) => {
             groupId: data.groupId,
             content: data.content,
             timestamp: new Date(),
-            media: data.media || undefined
+            media: data.media || undefined,
+            parentMessage: data.parentMessage || null
           });
           await message.save();
           // Fetch the saved message to ensure media is populated as stored
@@ -103,7 +108,8 @@ wss.on('connection', (ws) => {
                         content: data.content,
                         timestamp: savedMessage.timestamp,
                         clientTempId: data.clientTempId,
-                        media: savedMessage.media
+                        media: savedMessage.media,
+                        parentMessage: savedMessage.parentMessage
                       }
                     }));
                   }
@@ -121,7 +127,8 @@ wss.on('connection', (ws) => {
             receiver: data.receiverId,
             content: data.content,
             timestamp: new Date(),
-            media: data.media || undefined
+            media: data.media || undefined,
+            parentMessage: data.parentMessage || null
           });
           await message.save();
           // Fetch the saved message to ensure media is populated as stored
@@ -142,7 +149,8 @@ wss.on('connection', (ws) => {
                     content: data.content,
                     timestamp: savedMessage.timestamp,
                     clientTempId: data.clientTempId,
-                    media: savedMessage.media
+                    media: savedMessage.media,
+                    parentMessage: savedMessage.parentMessage
                   }
                 }));
               }
@@ -165,7 +173,8 @@ wss.on('connection', (ws) => {
                     content: data.content,
                     timestamp: savedMessage.timestamp,
                     clientTempId: data.clientTempId,
-                    media: savedMessage.media
+                    media: savedMessage.media,
+                    parentMessage: savedMessage.parentMessage
                   }
                 }));
               }
@@ -334,6 +343,36 @@ app.get('/api/messages/:userId', authenticateToken, async (req, res) => {
     
     res.json(messages);
   } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Fetch all replies to a given message (thread)
+app.get('/api/messages/:messageId/replies', authenticateToken, async (req, res) => {
+  try {
+    console.log('Fetching replies for messageId:', req.params.messageId);
+    
+    // Check if the message actually exists first
+    const parentMessage = await Message.findById(req.params.messageId);
+    if (!parentMessage) {
+      console.log('Parent message not found!');
+      return res.status(404).json({ error: 'Parent message not found' });
+    }
+    
+    const replies = await Message.find({ parentMessage: req.params.messageId }).sort('timestamp');
+    console.log('Replies found:', replies.length);
+    
+    if (replies.length > 0) {
+      console.log('Sample reply:', {
+        id: replies[0]._id,
+        content: replies[0].content,
+        parentMessage: replies[0].parentMessage
+      });
+    }
+    
+    res.json(replies);
+  } catch (error) {
+    console.error('Error fetching replies:', error);
     res.status(400).json({ error: error.message });
   }
 });

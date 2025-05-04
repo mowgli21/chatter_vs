@@ -17,7 +17,8 @@ const messageSchema = new mongoose.Schema({
     url: { type: String }, // base64 or URL
     type: { type: String }, // e.g., 'image', 'file', 'video', etc.
     name: { type: String }  // original filename
-  }
+  },
+  parentMessage: { type: mongoose.Schema.Types.ObjectId, ref: 'Message', default: null }
 });
 
 module.exports = mongoose.model('Message', messageSchema); 

@@ -33,6 +33,7 @@ const Chat = () => {
   const [profileForm, setProfileForm] = useState({ username: '', email: '', profilePic: '' });
   const [typingUsers, setTypingUsers] = useState({}); // {userId: timestamp} for direct, {groupId: {userId: timestamp}} for group
   const [readBy, setReadBy] = useState({}); // {messageId: [userId, ...]}
+  const [replyToMessage, setReplyToMessage] = useState(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -170,11 +171,15 @@ const Chat = () => {
       if (msg._id && msg.clientTempId) {
         // Remove any optimistic message with the same clientTempId
         map.delete(msg.clientTempId);
-        map.set(msg._id, msg);
+        // Merge with existing if present
+        const existing = map.get(msg._id) || {};
+        map.set(msg._id, { ...existing, ...msg, media: msg.media || existing.media });
       } else if (msg._id) {
-        map.set(msg._id, msg);
+        const existing = map.get(msg._id) || {};
+        map.set(msg._id, { ...existing, ...msg, media: msg.media || existing.media });
       } else if (msg.clientTempId) {
-        map.set(msg.clientTempId, msg);
+        const existing = map.get(msg.clientTempId) || {};
+        map.set(msg.clientTempId, { ...existing, ...msg, media: msg.media || existing.media });
       } else {
         map.set(JSON.stringify([msg.sender, msg.receiver, msg.content, msg.timestamp]), msg);
       }
@@ -223,6 +228,7 @@ const Chat = () => {
     if ((message.trim() === '' && !media) || (!selectedUser && !selectedGroup)) return;
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       const clientTempId = uuidv4();
+      const parentMessage = replyToMessage ? replyToMessage._id : null;
       if (selectedGroup) {
         // Group message
         const messageData = {
@@ -230,17 +236,18 @@ const Chat = () => {
           groupId: selectedGroup._id,
           content: message,
           clientTempId,
-          media
+          media,
+          parentMessage
         };
         ws.current.send(JSON.stringify(messageData));
-        // Optimistically add the message to the UI
         setMessages(prev => mergeMessages(prev, [{
           sender: currentUser,
           groupId: selectedGroup._id,
           content: message,
           timestamp: new Date(),
           clientTempId,
-          media
+          media,
+          parentMessage
         }]));
       } else if (selectedUser) {
         // Direct message
@@ -249,19 +256,21 @@ const Chat = () => {
           receiverId: selectedUser._id,
           content: message,
           clientTempId,
-          media
+          media,
+          parentMessage
         };
         ws.current.send(JSON.stringify(messageData));
-        // Optimistically add the message to the UI
         setMessages(prev => mergeMessages(prev, [{
           sender: currentUser,
           receiver: selectedUser._id,
           content: message,
           timestamp: new Date(),
           clientTempId,
-          media
+          media,
+          parentMessage
         }]));
       }
+      setReplyToMessage(null);
     }
   };
 
@@ -566,10 +575,17 @@ const Chat = () => {
                     selectedGroup={selectedGroup}
                     users={users}
                     media={message.media}
+                    onReply={() => setReplyToMessage(message)}
                   />
                 ))}
                 <div ref={messagesEndRef} />
               </div>
+              {replyToMessage && (
+                <div style={{ background: '#f0f7ff', borderLeft: '3px solid #1976d2', padding: '6px 12px', margin: '8px 0', borderRadius: 6, fontSize: 13 }}>
+                  Replying to: <b>{replyToMessage.content || (replyToMessage.media ? replyToMessage.media.name : 'Media')}</b>
+                  <button style={{ marginLeft: 12, fontSize: 12 }} onClick={() => setReplyToMessage(null)}>Cancel</button>
+                </div>
+              )}
               {typingIndicator}
               <ChatInput onSendMessage={handleSendMessage} onTyping={sendTyping} />
               {/* Group Profile Button */}
