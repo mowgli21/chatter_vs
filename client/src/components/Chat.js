@@ -249,7 +249,7 @@ const Chat = () => {
           // Convert reactions from Object to Map for each message
           const messagesWithMapReactions = response.data.map(msg => ({
             ...msg,
-            reactions: new Map(Object.entries(msg.reactions || {}))
+            reactions: new Map( Object.entries(msg.reactions || {}))
           }));
           setMessages(prev => mergeMessages(prev, messagesWithMapReactions));
         } catch (error) {
