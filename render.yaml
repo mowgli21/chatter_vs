@@ -2,7 +2,6 @@ services:
   - type: web
     name: chatter-vs-backend
     env: node
-    plan: free
     rootDir: server
     buildCommand: npm install
     startCommand: npm start
@@ -17,7 +16,6 @@ services:
   - type: web
     name: chatter-vs-frontend
     env: static
-    plan: free
     rootDir: client
     buildCommand: npm install ; npm run build
     staticPublishPath: build
