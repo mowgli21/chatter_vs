@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: chatter-vs-backend
+    env: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: PORT
+        value: 10000
+
+  - type: web
+    name: chatter-vs-frontend
+    env: static
+    plan: free
+    rootDir: client
+    buildCommand: npm install ; npm run build
+    staticPublishPath: build
+    envVars:
+      - key: REACT_APP_API_URL
+        sync: false
+      - key: REACT_APP_WS_URL
+        sync: false

@@ -1,0 +1,90 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  node_version: '18.x'
+
+stages:
+  - stage: BuildAndTest
+    displayName: 'Build and Test'
+    jobs:
+      - job: BuildTest
+        displayName: 'Build and Test FE & BE'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '$(node_version)'
+            displayName: 'Install Node.js'
+
+          - script: |
+              cd server
+              npm install
+              npm test
+            displayName: 'Install & Test Backend'
+
+          - script: |
+              cd client
+              npm install
+              npm run build
+              npm test -- --watchAll=false
+            displayName: 'Install, Build & Test Frontend'
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: 'client/build'
+              ArtifactName: 'frontend'
+              publishLocation: 'Container'
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: 'server'
+              ArtifactName: 'backend'
+              publishLocation: 'Container'
+
+  - stage: Deploy
+    displayName: 'Deploy to Azure Web Apps'
+    dependsOn: BuildAndTest
+    jobs:
+      - deployment: DeployBackend
+        displayName: 'Deploy Backend'
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: backend
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: '<YOUR_AZURE_SERVICE_CONNECTION>'
+                    appType: 'webApp'
+                    appName: '<YOUR_BACKEND_WEBAPP_NAME>'
+                    package: '$(Pipeline.Workspace)/backend'
+                    runtimeStack: 'NODE|18-lts'
+                    envVariables: |
+                      MONGODB_URI=$(MONGODB_URI)
+                      JWT_SECRET=$(JWT_SECRET)
+      - deployment: DeployFrontend
+        displayName: 'Deploy Frontend'
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: frontend
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: '<YOUR_AZURE_SERVICE_CONNECTION>'
+                    appType: 'webApp'
+                    appName: '<YOUR_FRONTEND_WEBAPP_NAME>'
+                    package: '$(Pipeline.Workspace)/frontend'
+                    runtimeStack: 'NODE|18-lts'
+                    envVariables: |
+                      REACT_APP_API_URL=$(REACT_APP_API_URL)
+                      REACT_APP_WS_URL=$(REACT_APP_WS_URL)
